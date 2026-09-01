@@ -32,43 +32,47 @@ Milestone 4 implements the grounded Retrieval-Augmented Generation (RAG) pipelin
 
 Milestone 5 implements the technical question generation engine under `src/interview_generator.py`. It analyzes the indexed repository vector store, identifies key modules and architectural patterns, and formulates codebase-grounded interview questions paired with target files and expected technical concepts.
 
+---
+
+## Milestone 6: Evidence-Based Answer Evaluation & Adaptive Follow-up Generator
+
+Milestone 6 implements the answer evaluation and adaptive follow-up generator under `src/evaluator.py`. It compares candidate responses against retrieved codebase ground-truth snippets, computes accuracy scores (0–100), details strengths and missed concepts, cites file paths and line ranges, and formulates adaptive follow-up questions.
+
 ### Features
-- **Codebase-Grounded Technical Questions**: Generates 3-5 open-ended interview questions tailored to actual repository modules.
-- **Categorized Question Topics**: Categorizes questions into topics such as *Architecture & Flow*, *Implementation Logic*, *Error Handling & Edge Cases*, and *Integration & Dependencies*.
-- **Target File Citations & Expected Concepts**: Every question lists target file paths and key technical concepts expected in a complete answer.
+- **Ground-Truth Code Evidence Retrieval**: Automatically fetches matching source code chunks from ChromaDB for evidence-based grading.
+- **Detailed Candidate Feedback**: Highlights exact technical concepts explained (`strengths`) versus omitted (`missed_concepts`).
+- **Adaptive Follow-up Generation**: Dynamically formulates the next question: probing missed concepts for partial answers, or posing advanced scaling/optimization questions for high-scoring answers.
 
 ---
 
 ### How to Run & Verify All Milestones
 
-#### 1. Run Complete Automated Test Suite (27/27 Tests Passing)
+#### 1. Run Complete Automated Test Suite (31/31 Tests Passing)
 ```bash
 python3 -m unittest discover -s tests
 ```
 
-#### 2. Run Technical Interview Question Generator CLI
-Run `src/interview_generator.py` with a public GitHub repository URL:
+#### 2. Run Answer Evaluation & Adaptive Follow-up CLI
+Run `src/evaluator.py` with a public GitHub repository URL:
 ```bash
-python3 src/interview_generator.py https://github.com/octocat/Hello-World
+python3 src/evaluator.py https://github.com/octocat/Hello-World
 ```
 
 #### Expected Terminal Output:
 ```text
-1. Ingesting repository: https://github.com/octocat/Hello-World ...
-2. Parsing & Chunking 1 files ...
-3. Indexing in Vector Store ...
-4. Generating Technical Interview Questions ...
+1. Ingesting: https://github.com/octocat/Hello-World ...
+2. Chunking & Indexing ...
+3. Generating Question ...
 
-==================== GENERATED TECHNICAL INTERVIEW ====================
+Evaluating Sample Answer for Question #1 ...
 
-Question #1 [Architecture & Flow]
-  Prompt          : How does data flow through README, and what is its primary responsibility in the application?
-  Target File(s)  : README
-  Expected Concepts: Function Definitions, Data Flow
-
-Question #2 [Implementation Logic]
-  Prompt          : Explain the core functions or classes defined in README. How are key operations handled?
-  Target File(s)  : README
-  Expected Concepts: Function Definitions, Data Flow
-=======================================================================
+==================== EVALUATION REPORT ====================
+Question       : How does README handle data flow and primary responsibilities?
+User Answer    : The module uses standard text and handles data flow across the application.
+Score          : 80/100 (Correct: True)
+Feedback       : Good answer! You explained the core implementation details accurately.
+Strengths      : Data Flow
+Missed Concepts: Function Definitions
+Follow-up      : To probe deeper into README (Lines 1-1): Can you explain how 'Function Definitions' is specifically handled in this part of the code?
+===========================================================
 ```
