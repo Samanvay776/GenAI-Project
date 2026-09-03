@@ -1,6 +1,6 @@
 # RepoViva Deployment Guide 🌐
 
-This document explains how to run RepoViva locally and deploy it to free public cloud platforms.
+This document explains how to run RepoViva locally and deploy it to free public cloud platforms, including configuring private GitHub repository access.
 
 ---
 
@@ -49,15 +49,36 @@ RepoViva is designed to run seamlessly on free public cloud hosting platforms.
    - **Main file path**: `app.py`
 4. Click **Deploy**. Streamlit Cloud will install dependencies from `requirements.txt` and launch the app under a public URL (e.g. `https://repoviva.streamlit.app`).
 
-### Option B: Hugging Face Spaces (Gradio / Streamlit Space)
-1. Create a free account on [Hugging Face](https://huggingface.co).
-2. Create a new **Space**, choose **Streamlit** as the Space SDK.
-3. Push `app.py`, `src/`, `requirements.txt` to the Space repository.
-4. Hugging Face Spaces will build and host your app with a public URL.
+---
+
+## 3. Configuring Private GitHub Repository Access
+
+RepoViva supports both **public** and **private** GitHub repositories.
+
+### Public Repositories
+Public repositories require no authentication or tokens. Simply enter any public GitHub URL in the sidebar and click **Ingest & Index Repository**.
+
+### Private Repositories
+To allow RepoViva to ingest private repositories on Streamlit Community Cloud:
+
+1. **Generate a GitHub Personal Access Token**:
+   - Go to GitHub Settings -> Developer Settings -> Personal Access Tokens -> Tokens (classic) or Fine-grained tokens.
+   - Generate a token with `repo` (Read access to code) scope.
+
+2. **Configure Streamlit Community Cloud Secrets**:
+   - In your Streamlit Cloud app dashboard, click **App Settings** -> **Secrets**.
+   - Add your token as `GITHUB_TOKEN`:
+     ```toml
+     GITHUB_TOKEN = "ghp_your_github_personal_access_token_here"
+     ```
+   - Save the secret. RepoViva will automatically use this token to securely access private repositories.
+
+3. **On-Demand Token Entry in UI**:
+   - Users can also enter a token on-demand under the **🔐 Private Repo Authentication** expander in the sidebar without storing it permanently.
 
 ---
 
-## 3. Architecture & LLM Inference Considerations
+## 4. Architecture & Security Guarantee
 
-- **Local Development**: Connects to local Ollama (`ChatOllama`) or uses the built-in grounded code analysis engine when Ollama is offline.
-- **Cloud Deployment**: Cloud platforms (Streamlit Cloud / Hugging Face Spaces) run Python and CPU sentence-transformers natively. RepoViva's built-in grounded code analysis engine handles Q&A, question generation, and answer evaluation 100% free without requiring external paid API keys.
+- **Zero Token Leakage**: Tokens are sent via secure HTTPS headers (`Authorization: Bearer <token>`). Tokens are never embedded in Git clone URLs or logged in exception messages.
+- **Zero Paid APIs**: Runs 100% free using CPU Hugging Face embeddings and local ChromaDB vector indexing.

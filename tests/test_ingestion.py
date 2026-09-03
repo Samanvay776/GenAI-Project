@@ -1,5 +1,5 @@
 """
-Unit tests for RepoViva Milestone 1: Repository Ingestion
+Unit tests for RepoViva Milestone 1 & Production: Repository Ingestion & Authentication
 Uses Python standard library `unittest` for zero-dependency test execution.
 """
 
@@ -16,6 +16,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.ingestion import (
     validate_github_url,
+    parse_github_owner_repo,
+    sanitize_token_text,
     detect_language,
     is_ignored_path,
     is_supported_file,
@@ -54,6 +56,20 @@ class TestRepositoryIngestion(unittest.TestCase):
         for url in invalid_urls:
             with self.subTest(url=url):
                 self.assertFalse(validate_github_url(url), f"Should fail for invalid URL: {url}")
+
+    def test_parse_github_owner_repo(self):
+        """Test owner and repository name parsing."""
+        owner, repo = parse_github_owner_repo("https://github.com/octocat/Hello-World.git")
+        self.assertEqual(owner, "octocat")
+        self.assertEqual(repo, "Hello-World")
+
+    def test_sanitize_token_text(self):
+        """Test token redaction to prevent secret leakage in logs and exceptions."""
+        raw_secret = "ghp_12345abcdefghijklmnopqrstuvwxyz6789"
+        error_msg = f"Failed to authenticate with token {raw_secret} for repo"
+        sanitized = sanitize_token_text(error_msg, token=raw_secret)
+        self.assertNotIn(raw_secret, sanitized)
+        self.assertIn("***GITHUB_TOKEN***", sanitized)
 
     def test_detect_language(self):
         """Test language detection based on extension."""
@@ -120,6 +136,22 @@ class TestRepositoryIngestion(unittest.TestCase):
         """Test cloning with an invalid URL raises ValueError."""
         with self.assertRaises(ValueError):
             clone_repository("https://invalid-url.com", "/tmp/dummy")
+
+    def test_clone_repository_private_missing_token_handling(self):
+        """Test accessing non-existent/private repo without token raises clear GITHUB_TOKEN prompt error."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with self.assertRaises(RuntimeError) as ctx:
+                clone_repository("https://github.com/nonexistent-user-12345/nonexistent-private-repo-99", tmp_dir, token=None)
+            self.assertIn("GITHUB_TOKEN", str(ctx.exception))
+
+    def test_clone_repository_private_invalid_token_sanitization(self):
+        """Test private repo access with invalid token raises error and redacts token."""
+        dummy_token = "ghp_dummysecrettoken9876543210"
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with self.assertRaises(RuntimeError) as ctx:
+                clone_repository("https://github.com/nonexistent-user-12345/nonexistent-private-repo-99", tmp_dir, token=dummy_token)
+            err_str = str(ctx.exception)
+            self.assertNotIn(dummy_token, err_str)
 
 
 if __name__ == "__main__":

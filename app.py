@@ -88,10 +88,19 @@ if "qa_history" not in st.session_state:
 # -----------------------------------------------------------------------------
 # Helper Functions
 # -----------------------------------------------------------------------------
-def initialize_repository_pipeline(url: str, collection_name: str = "streamlit_session"):
+def get_configured_github_token() -> Optional[str]:
+    """Retrieves GITHUB_TOKEN from Streamlit Secrets or environment variables."""
+    if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+        return str(st.secrets["GITHUB_TOKEN"]).strip()
+    if "GITHUB_TOKEN" in os.environ:
+        return os.environ["GITHUB_TOKEN"].strip()
+    return None
+
+
+def initialize_repository_pipeline(url: str, token: Optional[str] = None, collection_name: str = "streamlit_session"):
     """Ingests, chunks, and indexes a repository in ChromaDB."""
     with st.spinner("Step 1/3: Ingesting repository files..."):
-        ingest_res = ingest_repository(url, cleanup=True)
+        ingest_res = ingest_repository(url, token=token, cleanup=True)
         st.session_state.ingest_result = ingest_res
 
     with st.spinner(f"Step 2/3: Parsing & chunking {len(ingest_res.files)} source files..."):
@@ -126,12 +135,25 @@ with st.sidebar:
         placeholder="https://github.com/owner/repo"
     )
 
+    # Optional private token handling
+    secret_token = get_configured_github_token()
+    with st.expander("🔐 Private Repo Authentication"):
+        manual_token = st.text_input(
+            "GitHub Access Token",
+            type="password",
+            help="Required only for private GitHub repositories. Can also be set in Streamlit Secrets as GITHUB_TOKEN."
+        )
+        if secret_token:
+            st.caption("🟢 GITHUB_TOKEN configured in Streamlit Secrets / Environment.")
+
+    active_token = manual_token.strip() if manual_token.strip() else secret_token
+
     if st.button("⚡ Ingest & Index Repository", type="primary", use_container_width=True):
         if not validate_github_url(input_url):
             st.error("Please enter a valid HTTPS GitHub repository URL.")
         else:
             try:
-                initialize_repository_pipeline(input_url)
+                initialize_repository_pipeline(input_url, token=active_token)
                 st.success("Repository successfully indexed!")
             except Exception as err:
                 st.error(f"Ingestion failed: {err}")

@@ -1,19 +1,23 @@
 """
-RepoViva - Milestone 1: Repository Ingestion Module
+RepoViva - Milestone 1 & Production: Repository Ingestion Module
 
-This module provides functionality to validate, clone, and scan GitHub repositories,
-extracting source code and documentation files along with rich metadata while ignoring
-unnecessary binaries and build artifacts.
+This module provides functionality to validate, download/clone, and scan GitHub repositories
+(supporting both public and private repositories securely via GitHub API zipball extraction
+and authenticated Git headers), extracting source code and documentation files along with rich metadata.
 """
 
 import os
 import re
+import io
 import shutil
+import zipfile
 import subprocess
 import tempfile
+import urllib.request
+import urllib.error
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Set, Dict
+from typing import List, Optional, Set, Dict, Tuple
 
 
 # Map of common extensions to human-readable language names
@@ -120,6 +124,33 @@ def validate_github_url(url: str) -> bool:
     return bool(re.match(pattern, url))
 
 
+def parse_github_owner_repo(repo_url: str) -> Tuple[str, str]:
+    """Extracts (owner, repo_name) from a GitHub repository URL."""
+    if not validate_github_url(repo_url):
+        raise ValueError(f"Invalid GitHub URL: '{repo_url}'")
+    
+    clean_url = repo_url.strip().rstrip("/")
+    if clean_url.endswith(".git"):
+        clean_url = clean_url[:-4]
+        
+    parts = clean_url.split("/")
+    return parts[-2], parts[-1]
+
+
+def sanitize_token_text(text: str, token: Optional[str] = None) -> str:
+    """
+    Sanitizes string output to ensure GitHub tokens are never exposed in error messages or logs.
+    """
+    if not text:
+        return ""
+    if token and isinstance(token, str) and token.strip():
+        clean_token = token.strip()
+        text = text.replace(clean_token, "***GITHUB_TOKEN***")
+    # Redact any accidental inline token patterns (ghp_, gho_, github_pat_)
+    text = re.sub(r"(ghp|gho|github_pat)_[A-Za-z0-9_]+", "***GITHUB_TOKEN***", text)
+    return text
+
+
 def detect_language(file_path: Path) -> str:
     """Detects human-readable programming language or format from file extension."""
     ext = file_path.suffix.lower()
@@ -151,32 +182,107 @@ def is_supported_file(file_path: Path) -> bool:
     return False
 
 
-def clone_repository(repo_url: str, target_dir: str) -> None:
+def clone_repository(repo_url: str, target_dir: str, token: Optional[str] = None) -> None:
     """
-    Clones a remote GitHub repository into target_dir using shallow clone (--depth 1).
-    Raises ValueError for invalid URLs and RuntimeError if cloning fails.
+    Clones or downloads a remote GitHub repository into target_dir.
+    Supports both public and private repositories securely via authenticated GitHub API zipball
+    extraction and authenticated Git headers without exposing credentials.
     """
     if not validate_github_url(repo_url):
         raise ValueError(f"Invalid GitHub URL: '{repo_url}'. Expected format: https://github.com/owner/repo")
-    
-    # Normalize URL by ensuring .git suffix for git clone command
+
+    # Resolve token from parameter or environment
+    active_token = token or os.environ.get("GITHUB_TOKEN")
+    if active_token:
+        active_token = active_token.strip()
+
+    owner, repo = parse_github_owner_repo(repo_url)
+
+    # 1. Attempt Secure GitHub REST API Zipball Archive Download
+    zip_url = f"https://api.github.com/repos/{owner}/{repo}/zipball"
+    req = urllib.request.Request(zip_url)
+    req.add_header("User-Agent", "RepoViva-Ingestor")
+
+    if active_token:
+        req.add_header("Authorization", f"Bearer {active_token}")
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            zip_bytes = resp.read()
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                # Zipball archive contains a top-level root directory (e.g., owner-repo-commit_sha/)
+                namelist = zf.namelist()
+                root_prefix = namelist[0].split("/")[0] + "/" if namelist else ""
+                
+                for member in zf.infolist():
+                    member_path = member.filename
+                    if root_prefix and member_path.startswith(root_prefix):
+                        target_subpath = member_path[len(root_prefix):]
+                    else:
+                        target_subpath = member_path
+
+                    if not target_subpath or member.is_dir():
+                        continue
+
+                    dest_path = Path(target_dir) / target_subpath
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    with zf.open(member) as src, open(dest_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                        
+                return  # Download & extraction successful!
+                
+    except urllib.error.HTTPError as http_err:
+        if http_err.code in (401, 403, 404):
+            if not active_token:
+                raise RuntimeError(
+                    f"Failed to access repository '{repo_url}'. "
+                    f"If this is a private repository, a GitHub Personal Access Token (GITHUB_TOKEN) is required in Streamlit Secrets or environment variables."
+                )
+            else:
+                raise RuntimeError(
+                    f"Failed to authenticate with GitHub for private repository '{repo_url}'. "
+                    f"Please check that your GITHUB_TOKEN has permission to access this repository."
+                )
+    except Exception:
+        pass  # Fall back to git clone method if zipball API is unavailable
+
+    # 2. Fallback: Subprocess Git Clone with Authenticated Header
     clone_url = repo_url.strip()
     if not clone_url.endswith(".git"):
         clone_url = f"{clone_url}.git"
-        
+
+    cmd = ["git"]
+    if active_token:
+        cmd.extend(["-c", f"http.extraHeader=Authorization: Bearer {active_token}"])
+    cmd.extend(["clone", "--depth", "1", clone_url, target_dir])
+
     try:
-        result = subprocess.run(
-            ["git", "clone", "--depth", "1", clone_url, target_dir],
+        subprocess.run(
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             check=True
         )
     except subprocess.CalledProcessError as e:
-        err_msg = e.stderr.strip() or e.stdout.strip() or "Unknown git error"
-        raise RuntimeError(f"Failed to clone repository '{repo_url}'. Git error: {err_msg}")
+        raw_err = e.stderr.strip() or e.stdout.strip() or "Unknown git error"
+        safe_err = sanitize_token_text(raw_err, active_token)
+        
+        if any(err_term in safe_err for err_term in ["could not read Username", "Authentication failed", "Repository not found", "unable to access", "Could not resolve host"]):
+            if not active_token:
+                raise RuntimeError(
+                    f"Failed to clone repository '{repo_url}'. "
+                    f"If this is a private repository, please configure a GITHUB_TOKEN in Streamlit Secrets or environment variables."
+                )
+            else:
+                raise RuntimeError(
+                    f"Failed to access private repository '{repo_url}'. "
+                    f"Please check that your GITHUB_TOKEN has access permissions to this repository."
+                )
+        raise RuntimeError(f"Failed to clone repository '{repo_url}'. Git error: {safe_err}")
     except FileNotFoundError:
-        raise RuntimeError("Git CLI is not installed or not available in PATH.")
+        raise RuntimeError("Git CLI is not installed or available in PATH.")
 
 
 def scan_repository(repo_dir: str) -> IngestionResult:
@@ -245,16 +351,16 @@ def scan_repository(repo_dir: str) -> IngestionResult:
     return result
 
 
-def ingest_repository(repo_url: str, cleanup: bool = True) -> IngestionResult:
+def ingest_repository(repo_url: str, token: Optional[str] = None, cleanup: bool = True) -> IngestionResult:
     """
-    High-level function: validates URL, clones repository to a temp folder, and scans files.
+    High-level function: validates URL, clones/downloads repository to a temp folder, and scans files.
     """
     if not validate_github_url(repo_url):
         raise ValueError(f"Invalid GitHub URL: '{repo_url}'")
         
     temp_dir = tempfile.mkdtemp(prefix="repoviva_")
     try:
-        clone_repository(repo_url, temp_dir)
+        clone_repository(repo_url, temp_dir, token=token)
         res = scan_repository(temp_dir)
         res.repo_url = repo_url
         return res
@@ -266,13 +372,14 @@ def ingest_repository(repo_url: str, cleanup: bool = True) -> IngestionResult:
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python src/ingestion.py <github_repo_url>")
+        print("Usage: python src/ingestion.py <github_repo_url> [github_token]")
         sys.exit(1)
         
     target_url = sys.argv[1]
+    input_token = sys.argv[2] if len(sys.argv) > 2 else None
     print(f"Ingesting repository: {target_url} ...")
     try:
-        ingest_res = ingest_repository(target_url, cleanup=True)
+        ingest_res = ingest_repository(target_url, token=input_token, cleanup=True)
         print(f"\n--- Ingestion Summary ---")
         print(f"Repository URL    : {ingest_res.repo_url}")
         print(f"Accepted Files    : {len(ingest_res.files)}")
