@@ -19,6 +19,7 @@ from src.ingestion import (
     validate_github_url,
     parse_github_owner_repo,
     sanitize_token_text,
+    validate_github_token_permissions,
     detect_language,
     is_ignored_path,
     is_supported_file,
@@ -72,6 +73,24 @@ class TestRepositoryIngestion(unittest.TestCase):
         sanitized = sanitize_token_text(error_msg, token=raw_secret)
         self.assertNotIn(raw_secret, sanitized)
         self.assertIn("***GITHUB_TOKEN***", sanitized)
+
+    def test_validate_github_token_permissions_empty(self):
+        """Test empty token validation returns invalid status."""
+        is_valid, msg = validate_github_token_permissions("")
+        self.assertFalse(is_valid)
+        self.assertIn("empty", msg.lower())
+
+    def test_validate_github_token_permissions_valid_mock(self):
+        """Test valid token API mock returns success."""
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.headers = {"x-oauth-scopes": "repo, read:user"}
+        mock_resp.__enter__.return_value = mock_resp
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            is_valid, msg = validate_github_token_permissions("ghp_valid_mock_token")
+            self.assertTrue(is_valid)
+            self.assertIn("validated", msg.lower())
 
     def test_detect_language(self):
         """Test language detection based on extension."""

@@ -10,7 +10,12 @@ import json
 import streamlit as st
 from typing import List, Dict, Any, Optional
 
-from src.ingestion import ingest_repository, validate_github_url, IngestionResult
+from src.ingestion import (
+    ingest_repository,
+    validate_github_url,
+    validate_github_token_permissions,
+    IngestionResult
+)
 from src.parser import parse_and_chunk_files, Document
 from src.vector_store import RepoVectorStore
 from src.rag_pipeline import RepoRAGPipeline, RAGResult
@@ -135,18 +140,29 @@ with st.sidebar:
         placeholder="https://github.com/owner/repo"
     )
 
-    # Optional private token handling
+    # Multi-user per-session private token handling
     secret_token = get_configured_github_token()
-    with st.expander("🔐 Private Repo Authentication"):
-        manual_token = st.text_input(
-            "GitHub Access Token",
-            type="password",
-            help="Required only for private GitHub repositories. Can also be set in Streamlit Secrets as GITHUB_TOKEN."
+    with st.expander("🔐 Private Repo Authentication (Per-Session)"):
+        st.caption(
+            "🔒 **Privacy Notice**: For private repositories, supply a GitHub Personal Access Token with **read-only Contents** scope (`Contents: Read-only`). "
+            "Your token is processed in-memory for your browser session only and is **never saved, logged, or shared**."
         )
-        if secret_token:
-            st.caption("🟢 GITHUB_TOKEN configured in Streamlit Secrets / Environment.")
+        user_token_input = st.text_input(
+            "Per-Session GitHub Access Token",
+            type="password",
+            help="Fine-grained token with read-only Contents permission for private repos."
+        )
+        if user_token_input.strip():
+            is_valid, msg = validate_github_token_permissions(user_token_input.strip())
+            if is_valid:
+                st.caption(f"🟢 {msg}")
+            else:
+                st.caption(f"🔴 {msg}")
+        elif secret_token:
+            st.caption("ℹ️ Optional server GITHUB_TOKEN detected in Streamlit Secrets.")
 
-    active_token = manual_token.strip() if manual_token.strip() else secret_token
+    # Precedence: User-supplied per-session token -> Server Secrets token -> None
+    active_token = user_token_input.strip() if user_token_input.strip() else secret_token
 
     if st.button("⚡ Ingest & Index Repository", type="primary", use_container_width=True):
         if not validate_github_url(input_url):

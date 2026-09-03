@@ -151,6 +151,36 @@ def sanitize_token_text(text: str, token: Optional[str] = None) -> str:
     return text
 
 
+def validate_github_token_permissions(token: str) -> Tuple[bool, str]:
+    """
+    Validates a GitHub Personal Access Token against GitHub REST API (/user endpoint).
+    Returns (is_valid: bool, status_message: str).
+    Ensures tokens are active and have valid access without logging the raw token.
+    """
+    if not token or not isinstance(token, str) or not token.strip():
+        return False, "Token string is empty or invalid."
+
+    clean_token = token.strip()
+    req = urllib.request.Request("https://api.github.com/user")
+    req.add_header("User-Agent", "RepoViva-Ingestor")
+    req.add_header("Authorization", f"Bearer {clean_token}")
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                scopes = resp.headers.get("x-oauth-scopes", "")
+                scope_str = f" (Scopes: {scopes})" if scopes else ""
+                return True, f"Token active and validated successfully{scope_str}."
+            return True, "Token active and validated successfully."
+    except urllib.error.HTTPError as err:
+        if err.code in (401, 403):
+            return False, "Invalid or expired GitHub token. Please verify your token has read-only Contents access."
+        return False, f"GitHub API returned HTTP status {err.code} during token validation."
+    except Exception as e:
+        safe_msg = sanitize_token_text(str(e), clean_token)
+        return False, f"Token validation failed: {safe_msg}"
+
+
 def detect_language(file_path: Path) -> str:
     """Detects human-readable programming language or format from file extension."""
     ext = file_path.suffix.lower()
@@ -236,12 +266,12 @@ def clone_repository(repo_url: str, target_dir: str, token: Optional[str] = None
             if not active_token:
                 raise RuntimeError(
                     f"Failed to access repository '{repo_url}'. "
-                    f"If this is a private repository, a GitHub Personal Access Token (GITHUB_TOKEN) is required in Streamlit Secrets or environment variables."
+                    f"If this is a private repository, a GitHub Personal Access Token (with read-only Contents permission) is required."
                 )
             else:
                 raise RuntimeError(
                     f"Failed to authenticate with GitHub for private repository '{repo_url}'. "
-                    f"Please check that your GITHUB_TOKEN has permission to access this repository."
+                    f"Please check that your GitHub Personal Access Token has permission to access this repository."
                 )
     except Exception:
         pass  # Fall back to git clone method if zipball API is unavailable
@@ -272,12 +302,12 @@ def clone_repository(repo_url: str, target_dir: str, token: Optional[str] = None
             if not active_token:
                 raise RuntimeError(
                     f"Failed to clone repository '{repo_url}'. "
-                    f"If this is a private repository, please configure a GITHUB_TOKEN in Streamlit Secrets or environment variables."
+                    f"If this is a private repository, please supply a GitHub Personal Access Token (GITHUB_TOKEN) in the Private Repo Authentication settings."
                 )
             else:
                 raise RuntimeError(
                     f"Failed to access private repository '{repo_url}'. "
-                    f"Please check that your GITHUB_TOKEN has access permissions to this repository."
+                    f"Please check that your GitHub Personal Access Token has access permissions to this repository."
                 )
         raise RuntimeError(f"Failed to clone repository '{repo_url}'. Git error: {safe_err}")
     except FileNotFoundError:
