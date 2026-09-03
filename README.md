@@ -1,5 +1,6 @@
 # RepoViva 🚀 | Generative AI Codebase Technical Interviewer
 
+[![🚀 Live Demo](https://img.shields.io/badge/🚀%20Live%20Demo-RepoViva-ff4b4b?style=for-the-badge)](https://repoviva-interview.streamlit.app)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.50-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
 [![LangChain](https://img.shields.io/badge/LangChain-0.3-1C3C3C?style=for-the-badge&logo=chainlink&logoColor=white)](https://langchain.com)
