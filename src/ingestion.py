@@ -17,7 +17,7 @@ import urllib.request
 import urllib.error
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Set, Dict, Tuple
+from typing import List, Optional, Set, Dict, Tuple, Union
 
 
 # Map of common extensions to human-readable language names
@@ -191,10 +191,9 @@ def clone_repository(repo_url: str, target_dir: str, token: Optional[str] = None
     if not validate_github_url(repo_url):
         raise ValueError(f"Invalid GitHub URL: '{repo_url}'. Expected format: https://github.com/owner/repo")
 
-    # Resolve token from parameter or environment
-    active_token = token or os.environ.get("GITHUB_TOKEN")
-    if active_token:
-        active_token = active_token.strip()
+    # Resolve token safely ensuring string type
+    candidate_token = token if isinstance(token, str) and token.strip() else os.environ.get("GITHUB_TOKEN")
+    active_token = candidate_token.strip() if candidate_token and isinstance(candidate_token, str) and candidate_token.strip() else None
 
     owner, repo = parse_github_owner_repo(repo_url)
 
@@ -351,16 +350,29 @@ def scan_repository(repo_dir: str) -> IngestionResult:
     return result
 
 
-def ingest_repository(repo_url: str, token: Optional[str] = None, cleanup: bool = True) -> IngestionResult:
+def ingest_repository(repo_url: str, token: Optional[Union[str, bool]] = None, cleanup: bool = True) -> IngestionResult:
     """
     High-level function: validates URL, clones/downloads repository to a temp folder, and scans files.
+    
+    Supports token parameter as keyword argument or positional parameter:
+    - ingest_repository(repo_url)
+    - ingest_repository(repo_url, token="ghp_...")
+    - ingest_repository(repo_url, token=None, cleanup=True)
+    - ingest_repository(repo_url, True) -> backwards-compatible call where second arg is cleanup boolean
     """
+    # Handle backwards-compatible positional calls where boolean cleanup is passed as 2nd parameter
+    if isinstance(token, bool):
+        cleanup = token
+        actual_token = None
+    else:
+        actual_token = token
+
     if not validate_github_url(repo_url):
         raise ValueError(f"Invalid GitHub URL: '{repo_url}'")
         
     temp_dir = tempfile.mkdtemp(prefix="repoviva_")
     try:
-        clone_repository(repo_url, temp_dir, token=token)
+        clone_repository(repo_url, temp_dir, token=actual_token)
         res = scan_repository(temp_dir)
         res.repo_url = repo_url
         return res

@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch, MagicMock
 from pathlib import Path
 
 # Add project root to sys.path
@@ -23,6 +24,7 @@ from src.ingestion import (
     is_supported_file,
     scan_repository,
     clone_repository,
+    ingest_repository,
     SourceFile,
     IngestionResult
 )
@@ -152,6 +154,33 @@ class TestRepositoryIngestion(unittest.TestCase):
                 clone_repository("https://github.com/nonexistent-user-12345/nonexistent-private-repo-99", tmp_dir, token=dummy_token)
             err_str = str(ctx.exception)
             self.assertNotIn(dummy_token, err_str)
+
+    def test_ingest_repository_flexible_signatures(self):
+        """Verify ingest_repository handles all keyword and positional signatures cleanly without raising TypeError."""
+        mock_res = IngestionResult(repo_url="https://github.com/octocat/Hello-World", repo_dir="/tmp/dummy")
+
+        with patch("src.ingestion.clone_repository") as mock_clone, \
+             patch("src.ingestion.scan_repository", return_value=mock_res):
+            
+            # 1. Default call
+            ingest_repository("https://github.com/octocat/Hello-World")
+            mock_clone.assert_called_with("https://github.com/octocat/Hello-World", unittest.mock.ANY, token=None)
+
+            # 2. Keyword token=None
+            ingest_repository("https://github.com/octocat/Hello-World", token=None)
+            mock_clone.assert_called_with("https://github.com/octocat/Hello-World", unittest.mock.ANY, token=None)
+
+            # 3. Keyword token="ghp_secret"
+            ingest_repository("https://github.com/octocat/Hello-World", token="ghp_secret")
+            mock_clone.assert_called_with("https://github.com/octocat/Hello-World", unittest.mock.ANY, token="ghp_secret")
+
+            # 4. Positional boolean cleanup (backwards compatibility)
+            ingest_repository("https://github.com/octocat/Hello-World", True)
+            mock_clone.assert_called_with("https://github.com/octocat/Hello-World", unittest.mock.ANY, token=None)
+
+            # 5. Positional token string + keyword cleanup
+            ingest_repository("https://github.com/octocat/Hello-World", "ghp_secret", cleanup=True)
+            mock_clone.assert_called_with("https://github.com/octocat/Hello-World", unittest.mock.ANY, token="ghp_secret")
 
 
 if __name__ == "__main__":
