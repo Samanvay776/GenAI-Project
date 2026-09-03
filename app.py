@@ -99,7 +99,7 @@ def initialize_repository_pipeline(url: str, collection_name: str = "streamlit_s
         st.session_state.documents = docs
 
     with st.spinner("Step 3/3: Indexing embeddings in local ChromaDB vector store..."):
-        db_path = f"./chroma_db_{hash(url) % 10000}"
+        db_path = f"./chroma_db_{abs(hash(url)) % 10000}"
         vstore = RepoVectorStore(persist_directory=db_path)
         vstore.add_documents(docs, collection_name=collection_name)
         st.session_state.vector_store = vstore

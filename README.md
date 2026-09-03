@@ -1,78 +1,153 @@
-# RepoViva 🚀
+# RepoViva 🚀 | Generative AI Codebase Technical Interviewer
 
-RepoViva is a Generative AI developer tool built with LangChain, Vector Databases, and RAG. It conducts grounded technical interviews based on actual GitHub codebases.
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.50-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
+[![LangChain](https://img.shields.io/badge/LangChain-0.3-1C3C3C?style=for-the-badge&logo=chainlink&logoColor=white)](https://langchain.com)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-FF6F00?style=for-the-badge&logo=database&logoColor=white)](https://trychroma.com)
+[![Hugging Face](https://img.shields.io/badge/Hugging_Face-Embeddings-FFD21E?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
----
+**RepoViva** is an open-source, Retrieval-Augmented Generation (RAG) developer tool built with LangChain, ChromaDB, and local Hugging Face Sentence Transformers. It analyzes GitHub source code repositories and conducts **grounded, evidence-based technical interviews** based on actual codebases.
 
-## Milestone 1: Repository Ingestion
-
-Milestone 1 implements the repository ingestion and scanning module under `src/ingestion.py`. It accepts a public GitHub repository URL, clones the repository into a temporary directory, scans supported source code and documentation files, extracts rich metadata, and ignores unwanted build artifacts/binaries.
-
----
-
-## Milestone 2: Intelligent Code & Documentation Chunking
-
-Milestone 2 implements language-aware text and code chunking under `src/parser.py`. It parses source code and documentation files into semantic chunks while generating LangChain-compatible `Document` structures enriched with precise line numbers and file metadata.
+Unlike generic PDF/Chatbot implementations, RepoViva is strictly grounded in the target repository's code files—extracting exact line-number citations (`start_line`, `end_line`), evaluating candidate answers against real implementation logic, and generating adaptive follow-up questions.
 
 ---
 
-## Milestone 3: Hugging Face Embeddings & ChromaDB Vector Store
+## 🌟 Key Features
 
-Milestone 3 integrates local Hugging Face Sentence Transformers embeddings (`sentence-transformers/all-MiniLM-L6-v2`) and persistent vector database indexing using ChromaDB under `src/vector_store.py`.
+1. **🚀 Automatic Repository Ingestion**:
+   - Clones any public GitHub repository via shallow clone (`git clone --depth 1`).
+   - Recursively scans code files (`.py`, `.js`, `.tsx`, `.java`, `.cpp`, `.md`, `.json`, etc.) while pruning build artifacts (`node_modules`, `.git`, `__pycache__`, `.venv`).
+
+2. **🧩 Intelligent Language-Aware Chunking**:
+   - Uses syntax boundary splitting (`class`, `def`, `function`, `interface`, markdown headings) to keep code units intact.
+   - Embeds rich metadata (relative file path, language tag, start line, and end line numbers).
+
+3. **⚡ Local Hugging Face Embeddings & ChromaDB Vector Store**:
+   - Converts code chunks into 384-dimensional dense vectors using `sentence-transformers/all-MiniLM-L6-v2`.
+   - Stores vectors in a persistent local ChromaDB database with cosine similarity indexing.
+   - **Zero Paid API Requirement**: 100% free and open-source execution.
+
+4. **🔍 Grounded Codebase Q&A (RAG Pipeline)**:
+   - Queries ChromaDB for top-$K$ matching code fragments.
+   - Formulates grounded prompts that restrict answers strictly to retrieved code evidence.
+   - Displays exact file paths and line number citations (`Lines 15-28`).
+
+5. **🎓 Grounded Technical Interview Engine**:
+   - Discovers key repository modules and generates open-ended technical questions categorized into *Architecture & Flow*, *Implementation Logic*, *Error Handling*, and *Dependencies*.
+   - Pairs every question with target source files and expected technical concepts.
+
+6. **📝 Evidence-Based Answer Evaluation**:
+   - Evaluates candidate answers against ground-truth code snippets retrieved from ChromaDB.
+   - Calculates candidate score (0–100), detects `strengths` vs. `missed_concepts`, and cites code line ranges.
+
+7. **🔄 Adaptive Follow-up Question Generator**:
+   - Dynamically formulates the next question: probing missed concepts for partial answers, or posing advanced optimization/scaling questions for high-scoring candidates.
+
+8. **📊 Interactive Streamlit Web Dashboard**:
+   - Glassmorphism dark-themed UI organized into 4 interactive tabs.
+   - Session analytics summary with downloadable JSON evaluation reports.
 
 ---
 
-## Milestone 4: LangChain RAG Pipeline & Ollama Integration
+## 🏗️ System Architecture
 
-Milestone 4 implements the grounded Retrieval-Augmented Generation (RAG) pipeline under `src/rag_pipeline.py`. It queries ChromaDB vector retrievers, injects retrieved code chunks into a grounded system prompt template, and invokes local Ollama models (`ChatOllama`) to answer technical questions backed strictly by code evidence.
+```mermaid
+graph TD
+    A[GitHub Repository URL] --> B[Repository Ingestion Module]
+    B --> C[Source Code & Documentation Processing]
+    C --> D[Intelligent Language-Aware Chunking]
+    D --> E[Hugging Face Sentence Embeddings]
+    E --> F[Persistent ChromaDB Vector Store]
+    F --> G[Vector Retriever]
+    G --> H[LangChain RAG Pipeline]
+    H --> I[Grounded Local LLM Engine]
+    I --> J[Codebase Technical Q&A]
+    I --> K[Interview Question Generator]
+    K --> L[Candidate Answer Input]
+    L --> M[Evidence-Based Answer Evaluator]
+    M --> N[Adaptive Follow-up Questions]
+    N --> O[Streamlit Web Application UI]
+```
 
 ---
 
-## Milestone 5: Technical Interview Question Generation Engine
+## 🛠️ Technology Stack
 
-Milestone 5 implements the technical question generation engine under `src/interview_generator.py`. It analyzes the indexed repository vector store, identifies key modules and architectural patterns, and formulates codebase-grounded interview questions paired with target files and expected technical concepts.
-
----
-
-## Milestone 6: Evidence-Based Answer Evaluation & Adaptive Follow-up Generator
-
-Milestone 6 implements the answer evaluation and adaptive follow-up generator under `src/evaluator.py`. It compares candidate responses against retrieved codebase ground-truth snippets, computes accuracy scores (0–100), details strengths and missed concepts, cites file paths and line ranges, and formulates adaptive follow-up questions.
-
-### Features
-- **Ground-Truth Code Evidence Retrieval**: Automatically fetches matching source code chunks from ChromaDB for evidence-based grading.
-- **Detailed Candidate Feedback**: Highlights exact technical concepts explained (`strengths`) versus omitted (`missed_concepts`).
-- **Adaptive Follow-up Generation**: Dynamically formulates the next question: probing missed concepts for partial answers, or posing advanced scaling/optimization questions for high-scoring answers.
+| Layer | Technology | Purpose & Rationale |
+| :--- | :--- | :--- |
+| **Language** | Python 3.9+ | Core application logic, script automation, and test runner. |
+| **RAG Framework** | LangChain / LangChain-Community | Orchestrates prompt templates, document schemas, and retrievers. |
+| **Embeddings** | Hugging Face (`sentence-transformers/all-MiniLM-L6-v2`) | Local CPU vector embeddings (384-dim), 100% free with 0 API costs. |
+| **Vector DB** | ChromaDB | Persistent local vector store with HNSW cosine distance indexing. |
+| **Frontend UI** | Streamlit (v1.50) | Responsive glassmorphism dashboard with interactive tabs & metrics. |
+| **Version Control** | Git / GitHub | Code management, repository ingestion, and automated tracking. |
 
 ---
 
-### How to Run & Verify All Milestones
+## 💻 Local Quickstart Guide
 
-#### 1. Run Complete Automated Test Suite (31/31 Tests Passing)
+### 1. Clone the Repository
+```bash
+git clone https://github.com/Samanvay776/GenAI-Project.git
+cd GenAI-Project
+```
+
+### 2. Create & Activate Virtual Environment
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install Production Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Run the Automated Unit Test Suite (33/33 Passing)
 ```bash
 python3 -m unittest discover -s tests
 ```
 
-#### 2. Run Answer Evaluation & Adaptive Follow-up CLI
-Run `src/evaluator.py` with a public GitHub repository URL:
+### 5. Launch the Streamlit Web Application
 ```bash
-python3 src/evaluator.py https://github.com/octocat/Hello-World
+streamlit run app.py
 ```
+Open your browser at `http://localhost:8501`.
 
-#### Expected Terminal Output:
-```text
-1. Ingesting: https://github.com/octocat/Hello-World ...
-2. Chunking & Indexing ...
-3. Generating Question ...
+---
 
-Evaluating Sample Answer for Question #1 ...
+## 🌐 Public Cloud Deployment Guide
 
-==================== EVALUATION REPORT ====================
-Question       : How does README handle data flow and primary responsibilities?
-User Answer    : The module uses standard text and handles data flow across the application.
-Score          : 80/100 (Correct: True)
-Feedback       : Good answer! You explained the core implementation details accurately.
-Strengths      : Data Flow
-Missed Concepts: Function Definitions
-Follow-up      : To probe deeper into README (Lines 1-1): Can you explain how 'Function Definitions' is specifically handled in this part of the code?
-===========================================================
-```
+RepoViva is pre-configured for free one-click public cloud deployment on **Streamlit Community Cloud**.
+
+### Deploying on Streamlit Community Cloud (Recommended)
+1. Fork or push this repository to GitHub (`https://github.com/Samanvay776/GenAI-Project`).
+2. Log into [share.streamlit.io](https://share.streamlit.io) using your GitHub account.
+3. Click **New App** and select:
+   - **Repository**: `Samanvay776/GenAI-Project`
+   - **Branch**: `main`
+   - **Main file path**: `app.py`
+4. Click **Deploy**. Streamlit Cloud will build the app using `requirements.txt` and launch it under a public URL (e.g. `https://repoviva.streamlit.app`).
+
+---
+
+## 🧪 Testing & Verification Summary
+
+| Module | Test File | Test Cases | Status |
+| :--- | :--- | :--- | :--- |
+| **Repository Ingestion** | `tests/test_ingestion.py` | URL validation, path skipping, scanning, mock git | ✅ PASS (7/7) |
+| **Code Chunking** | `tests/test_parser.py` | Document schema, python/markdown chunking, line bounds | ✅ PASS (6/6) |
+| **Vector Store** | `tests/test_vector_store.py` | Embeddings generation, ChromaDB add/count/query, scoring | ✅ PASS (5/5) |
+| **LangChain RAG** | `tests/test_rag_pipeline.py` | Grounded context formatting, citations extraction, RAG execution | ✅ PASS (5/5) |
+| **Question Generator** | `tests/test_interview_generator.py` | Codebase question generation, topic categorizing, concepts | ✅ PASS (4/4) |
+| **Answer Evaluator** | `tests/test_evaluator.py` | Ground-truth grading, strengths/missed concepts, adaptive follow-ups | ✅ PASS (4/4) |
+| **Web UI Integration** | `tests/test_app.py` | Entry point check, requirements validation | ✅ PASS (2/2) |
+
+**Total Test Suite Result**: `33/33 Tests Passed (0.009s)`
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
