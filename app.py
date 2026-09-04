@@ -129,8 +129,7 @@ def initialize_repository_pipeline(url: str, token: Optional[str] = None, collec
 # Sidebar Navigation & Settings
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.image("https://img.icons8.com/gradient-geometry/100/code-fork.png", width=64)
-    st.title("RepoViva Dashboard")
+    st.title("🤖 RepoViva Dashboard")
     st.markdown("---")
     
     st.subheader("📌 Target Repository")
